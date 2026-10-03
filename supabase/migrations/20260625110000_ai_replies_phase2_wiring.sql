@@ -1,0 +1,31 @@
+-- Phase 2: AI replies are wired end-to-end.
+--
+-- Changes (deployed to live Postgres):
+--   * process_inbound_email enqueues an ai_reply action when:
+--       - tenants.ai_replies_enabled = true
+--       - an agent resolves via journeys.ai_agent_id OR tenants.default_ai_agent_id
+--       - agent.enabled = true
+--       - lead.email_conversation_count < agent.max_replies_per_lead
+--     Action carries payload = {source, agent_id, inbound_event_id,
+--     inbound_from, inbound_subject, inbound_thread_id}. Idempotency key
+--     'ai_reply:<event_id>' prevents double-AI-reply on retried polling.
+--
+--   * dispatch_pending_actions adds an ai_reply branch alongside
+--     call/sms/email — fires generate-ai-reply via pg_net with the
+--     internal_dispatch_key Bearer. Removes ai_reply from the n8n
+--     hand-off set.
+--
+-- New edge function: generate-ai-reply
+--   - Loads agent + KB + history + inbound + provider api_key
+--   - Calls Anthropic (tool_use) OR OpenAI (json_schema) with the same
+--     structured output: { intent, confidence, reasoning, reply }
+--   - Decides: escalate (intent in escalate_on_intents OR confidence <
+--     threshold) creates team_alert; else creates an outbound email
+--     action with payload.inline = { body: reply, subject: '' } so
+--     get_email_payload auto-derives the Re: subject from the thread.
+--   - Inserts ai_reply_events audit row with tokens + cost estimate.
+--   - Marks the ai_reply action completed with result summary.
+--
+-- Function body in deployed Postgres; edge fn deployed separately.
+
+select 1 where false;

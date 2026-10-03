@@ -1,0 +1,22 @@
+-- pg_cron + Supabase Cron job for inbox polling.
+--
+-- Schedule: every minute. The poll-gmail-inbox edge function walks every
+-- sender with google_refresh_token + gmail_readonly_granted, calls
+-- users.history.list from the saved cursor, fetches new INBOX messages,
+-- pipes them through process_inbound_email, advances the cursor.
+--
+-- Auth: the job posts with Bearer <internal_dispatch_key from Vault>.
+-- The edge function accepts that or the service role key.
+--
+-- Operational:
+--   * Monitor: select * from cron.job_run_details order by start_time desc limit 20;
+--   * Pause:   update cron.job set active = false where jobname='poll-gmail-inbox';
+--   * Change schedule:
+--       select cron.unschedule('poll-gmail-inbox');
+--       then re-run cron.schedule with a different cron expression.
+--
+-- Migration is a stub mirror — the actual extension + job are in deployed
+-- Postgres via apply_migration calls; pg_cron isn't safe to recreate on
+-- replays.
+
+select 1 where false;

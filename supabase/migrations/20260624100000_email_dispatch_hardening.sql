@@ -1,0 +1,26 @@
+-- Email dispatch hardening:
+--   1. templates: add body_plain text + body_format check('both'|'html'|'plain')
+--   2. get_email_payload: JIT daily reset (sent_today/last_reset_date),
+--      enforce cap + cool-down + pause on the assigned_sender path,
+--      return body_html + body_plain + body_format, new outcome='throttled'
+--      with next_eligible_at so the dispatcher can DEFER without burning
+--      retries on a cap hit.
+--   3. reschedule_action(action_id, run_at, reason) — defers a locked
+--      action: clears the lock, sets run_at, sets pending. The edge
+--      function calls it on outcome='throttled' so daily-cap doesn't
+--      consume the retry budget.
+--
+-- Why: per-sender daily_limit was previously enforced only when SELECTING
+-- a sender from the pool. If the lead already had an assigned_sender_id
+-- (which is sticky for thread continuity), the cap was bypassed. Hot fix.
+-- Also: HTML-only emails get docked by spam filters. multipart/alternative
+-- is now the default; edge function auto-derives plain from HTML if no
+-- explicit body_plain is provided.
+--
+-- pg_cron is NOT installed on this project, so there is no scheduled
+-- daily reset. The reset is JIT: get_email_payload checks last_reset_date
+-- < current_date and zeros sent_today in-place before the cap check.
+--
+-- Function bodies in deployed Postgres.
+
+select 1 where false;

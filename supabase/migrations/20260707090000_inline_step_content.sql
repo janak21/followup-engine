@@ -1,0 +1,297 @@
+-- Phase 4: SMS/email payload RPCs support step-authored inline content.
+-- Operator/AI inline payloads keep priority over step_spec inline content.
+
+CREATE OR REPLACE FUNCTION public.get_sms_payload(p_action_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_action actions;
+  v_lead leads;
+  v_template templates;
+  v_credentials tenant_credentials;
+  v_body text;
+  v_inline_body text;
+begin
+  select * into v_action from actions where id = p_action_id;
+  if not found then
+    raise exception 'Action not found: %', p_action_id;
+  end if;
+
+  select * into v_lead from leads where id = v_action.lead_id;
+  if not found then
+    raise exception 'Lead not found for action: %', p_action_id;
+  end if;
+
+  -- Inline priority: operator/AI inline reply > step-authored content > template.
+  v_inline_body := coalesce(
+    nullif(v_action.payload->'inline'->>'body', ''),
+    nullif(v_action.payload->'step_spec'->>'inline_body', '')
+  );
+
+  if v_inline_body is null or v_inline_body = '' then
+    select * into v_template from templates
+     where tenant_id = v_action.tenant_id
+       and template_key = v_action.template_key
+     order by version desc
+     limit 1;
+    if not found then
+      raise exception 'Template not found for action: %', p_action_id;
+    end if;
+    v_body := render_template(v_template.body, v_lead);
+  else
+    -- Inline path: render merge tags on the operator-typed body.
+    begin
+      v_body := render_template(v_inline_body, v_lead);
+    exception when undefined_function then
+      v_body := replace(v_inline_body, '{{first_name}}', coalesce(v_lead.first_name,''));
+    end;
+  end if;
+
+  select * into v_credentials from tenant_credentials
+   where tenant_id = v_action.tenant_id
+     and provider = 'twilio'
+     and active = true;
+
+  if not found then
+    raise exception 'Active Twilio credentials not found for tenant %', v_action.tenant_id;
+  end if;
+
+  return jsonb_build_object(
+    'action_id', v_action.id,
+    'provider_id', v_action.provider_id,
+    'phone_to', v_lead.phone_e164,
+    'first_name', v_lead.first_name,
+    'body', v_body,
+    'twilio_credential_name', v_credentials.n8n_credential_name,
+    'twilio_from_number', v_credentials.config->>'from_number'
+  );
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.get_email_payload(p_action_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_action actions;
+  v_lead leads;
+  v_template templates;
+  v_sender senders;
+  v_body_html text;
+  v_body_plain text;
+  v_subject text;
+  v_now timestamptz := now();
+  v_next_eligible timestamptz;
+  v_min_between interval;
+  v_sender_is_usable bool;
+  v_has_prior_thread bool;
+  v_inline_subject text;
+  v_inline_body text;
+  v_inline_plain text;
+  v_inline_format text;
+  v_inline_to text;
+  v_prior_subject text;
+  v_resolved_to text;
+begin
+  select * into v_action from actions where id = p_action_id;
+  if not found then return jsonb_build_object('outcome','failed','reason','Action not found'); end if;
+
+  select * into v_lead from leads where id = v_action.lead_id;
+  if not found then return jsonb_build_object('outcome','failed','reason','Lead not found'); end if;
+
+  -- Inline priority: operator/AI inline reply > step-authored content > template.
+  v_inline_subject := coalesce(
+    nullif(v_action.payload->'inline'->>'subject', ''),
+    nullif(v_action.payload->'step_spec'->>'inline_subject', '')
+  );
+  v_inline_body := coalesce(
+    nullif(v_action.payload->'inline'->>'body', ''),
+    nullif(v_action.payload->'step_spec'->>'inline_body', '')
+  );
+  v_inline_plain   := v_action.payload->'inline'->>'body_plain';
+  v_inline_format  := v_action.payload->'inline'->>'body_format';
+  v_inline_to      := v_action.payload->'inline'->>'to';
+
+  if v_inline_body is null or v_inline_body = '' then
+    select * into v_template
+      from templates
+     where tenant_id = v_action.tenant_id
+       and template_key = v_action.template_key
+     order by version desc
+     limit 1;
+    if not found then return jsonb_build_object('outcome','failed','reason','Template not found'); end if;
+  end if;
+
+  if v_lead.assigned_sender_id is not null then
+    select * into v_sender from senders where id = v_lead.assigned_sender_id;
+    v_sender_is_usable :=
+         v_sender.id is not null
+     and v_sender.active = true
+     and v_sender.warmup_stage in ('warming','active')
+     and (v_sender.pause_until is null or v_sender.pause_until < v_now)
+     and v_sender.google_refresh_token is not null;
+
+    if not v_sender_is_usable then
+      select exists(select 1 from events where lead_id = v_lead.id and channel = 'email') into v_has_prior_thread;
+      if v_has_prior_thread then
+        return jsonb_build_object(
+          'outcome','failed',
+          'reason','Assigned sender ' || v_sender.sender_email ||
+                   ' is no longer usable, but this lead has an existing email thread. ' ||
+                   'Manually reassign or reconnect the sender to preserve thread continuity.'
+        );
+      end if;
+      update leads set assigned_sender_id = null where id = v_lead.id;
+      v_lead.assigned_sender_id := null;
+      v_sender := null;
+    end if;
+  end if;
+
+  if v_sender.id is null then
+    select * into v_sender
+      from senders
+     where tenant_id = v_action.tenant_id
+       and active = true
+       and warmup_stage in ('warming','active')
+       and (pause_until is null or pause_until < v_now)
+       and google_refresh_token is not null
+     order by last_sent_at nulls first
+     limit 1;
+  end if;
+  if v_sender.id is null then
+    return jsonb_build_object(
+      'outcome','no_sender',
+      'reason','No sender available. Connect Google for at least one active sender in Settings → Senders.'
+    );
+  end if;
+
+  if v_sender.last_reset_date < current_date then
+    update senders set sent_today = 0, last_reset_date = current_date
+     where id = v_sender.id returning * into v_sender;
+  end if;
+
+  v_min_between := (v_sender.min_seconds_between_sends || ' seconds')::interval;
+
+  if v_sender.pause_until is not null and v_sender.pause_until > v_now then
+    return jsonb_build_object('outcome','throttled','reason','Sender paused until ' || v_sender.pause_until::text,
+      'next_eligible_at', v_sender.pause_until, 'sender_id', v_sender.id, 'sender_email', v_sender.sender_email);
+  end if;
+  if v_sender.sent_today >= v_sender.daily_limit then
+    v_next_eligible := (current_date + interval '1 day') + interval '1 minute';
+    return jsonb_build_object('outcome','throttled',
+      'reason','Daily limit reached: ' || v_sender.sent_today || '/' || v_sender.daily_limit || ' for ' || v_sender.sender_email,
+      'next_eligible_at', v_next_eligible, 'sender_id', v_sender.id, 'sender_email', v_sender.sender_email);
+  end if;
+  if v_sender.last_sent_at is not null and v_sender.last_sent_at + v_min_between > v_now then
+    v_next_eligible := v_sender.last_sent_at + v_min_between;
+    return jsonb_build_object('outcome','throttled','reason','Cooldown: min_seconds_between_sends=' || v_sender.min_seconds_between_sends,
+      'next_eligible_at', v_next_eligible, 'sender_id', v_sender.id, 'sender_email', v_sender.sender_email);
+  end if;
+
+  if v_lead.assigned_sender_id is null or v_lead.assigned_sender_id != v_sender.id then
+    update leads set assigned_sender_id = v_sender.id where id = v_lead.id;
+  end if;
+
+  if v_inline_body is not null and v_inline_body <> '' then
+    if (v_inline_subject is null or trim(v_inline_subject) = '' or v_inline_subject ~ '^\s*[Rr][Ee]:\s*$')
+       and v_lead.email_thread_id is not null and (v_inline_to is null or v_inline_to = '') then
+      -- Only auto-thread when we're actually replying to the lead. Team-
+      -- alert-style overrides skip the thread lookup.
+      select subject into v_prior_subject
+        from events
+       where lead_id = v_lead.id
+         and channel = 'email'
+         and direction = 'outbound'
+         and subject is not null
+         and length(trim(subject)) > 0
+         and raw_payload->>'thread_id' = v_lead.email_thread_id
+       order by created_at desc
+       limit 1;
+      if v_prior_subject is not null then
+        v_inline_subject := v_prior_subject;
+      end if;
+    end if;
+
+    begin
+      v_subject := render_template(coalesce(v_inline_subject, ''), v_lead);
+    exception when undefined_function then
+      v_subject := replace(coalesce(v_inline_subject,''), '{{first_name}}', coalesce(v_lead.first_name,''));
+    end;
+    begin
+      v_body_html := render_template(v_inline_body, v_lead);
+    exception when undefined_function then
+      v_body_html := replace(v_inline_body, '{{first_name}}', coalesce(v_lead.first_name,''));
+    end;
+    if v_inline_plain is not null and v_inline_plain <> '' then
+      begin
+        v_body_plain := render_template(v_inline_plain, v_lead);
+      exception when undefined_function then
+        v_body_plain := replace(v_inline_plain, '{{first_name}}', coalesce(v_lead.first_name,''));
+      end;
+    end if;
+  else
+    begin
+      v_subject := render_template(v_template.subject, v_lead);
+    exception when undefined_function then
+      v_subject := replace(coalesce(v_template.subject,''), '{{first_name}}', coalesce(v_lead.first_name,''));
+    end;
+    begin
+      v_body_html := render_template(v_template.body, v_lead);
+    exception when undefined_function then
+      v_body_html := replace(coalesce(v_template.body,''), '{{first_name}}', coalesce(v_lead.first_name,''));
+    end;
+    if v_template.body_plain is not null and length(v_template.body_plain) > 0 then
+      begin
+        v_body_plain := render_template(v_template.body_plain, v_lead);
+      exception when undefined_function then
+        v_body_plain := replace(v_template.body_plain, '{{first_name}}', coalesce(v_lead.first_name,''));
+      end;
+    end if;
+  end if;
+
+  -- Recipient resolution: inline.to override (team_alert routing) beats lead.email.
+  v_resolved_to := coalesce(nullif(trim(coalesce(v_inline_to, '')), ''), v_lead.email);
+
+  return jsonb_build_object(
+    'outcome','success',
+    'action_id', v_action.id,
+    'provider_id', v_action.provider_id,
+    'email_to', v_resolved_to,
+    'first_name', v_lead.first_name,
+    'subject', v_subject,
+    'body', v_body_html,
+    'body_html', v_body_html,
+    'body_plain', v_body_plain,
+    'body_format', coalesce(v_inline_format, v_template.body_format, 'both'),
+    'gmail_credential_id', '',
+    'gmail_credential_name', v_sender.n8n_credential_name,
+    'sender_id', v_sender.id,
+    'sender_email', v_sender.sender_email,
+    'sender_name', v_sender.sender_name,
+    -- When routing to a team address we don't want Gmail to fold this into
+    -- the lead's existing thread — that would leak internal alerts into the
+    -- customer conversation. Zero the thread hints if there's a to-override.
+    'email_thread_id', case when v_inline_to is not null and v_inline_to <> '' then null else v_lead.email_thread_id end,
+    'last_email_message_id', case when v_inline_to is not null and v_inline_to <> '' then null else v_lead.last_email_message_id end,
+    'has_thread', case
+      when v_inline_to is not null and v_inline_to <> '' then false
+      else (v_lead.email_thread_id is not null and v_lead.last_email_message_id is not null)
+    end
+  );
+end;
+$function$;
+
+revoke execute on function public.get_sms_payload(uuid)
+  from public, anon, authenticated;
+grant execute on function public.get_sms_payload(uuid)
+  to service_role;
+
+revoke execute on function public.get_email_payload(uuid)
+  from public, anon, authenticated;
+grant execute on function public.get_email_payload(uuid)
+  to service_role;

@@ -1,0 +1,13 @@
+-- Option A: process_retell_call_result auto-registers a tenant custom field
+-- definition for every custom_analysis_data key emitted by the Retell agent.
+-- The value already lands on lead.custom_fields; this just makes the field
+-- visible in the Custom Fields UI and in the journey builder field pickers.
+--
+-- Idempotent. Existing field declarations are never overwritten. Type is
+-- inferred from the JSON value shape. All agent-emitted fields land in
+-- folder 'Auto from Retell'; last_call_* fields in 'Call History'.
+--
+-- Full bodies for ensure_tenant_custom_field, infer_custom_field_type, and
+-- the rewritten process_retell_call_result are in the deployed Postgres
+-- (applied via Supabase MCP as migration auto_register_retell_custom_fields).
+select 1 where false;

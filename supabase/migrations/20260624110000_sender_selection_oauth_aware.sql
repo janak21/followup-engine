@@ -1,0 +1,26 @@
+-- Sender selection bugfix: rotation must only consider senders that
+-- physically CAN send. For Gmail/email that means
+-- google_refresh_token IS NOT NULL. Without this filter, the
+-- round-robin "least-recently-used" ordering picks unsendable senders,
+-- stamps them onto lead.assigned_sender_id, and the email permanently
+-- fails because the edge function has no OAuth token to use.
+--
+-- Two behaviour changes in get_email_payload:
+--
+--   1. Pool selection (when lead.assigned_sender_id is null):
+--      adds `google_refresh_token is not null` to the WHERE.
+--
+--   2. Self-healing assignment: if lead.assigned_sender_id is set but
+--      the assigned sender is no longer usable (inactive, paused,
+--      warmup paused/burnt, or refresh_token missing) AND the lead
+--      has no prior email events on this thread, we CLEAR the
+--      assignment and re-pick from the (filtered) pool. If a thread
+--      DOES exist, we refuse to switch and surface a clear error —
+--      switching senders mid-thread breaks RFC-822 threading,
+--      hurts deliverability, and looks suspicious to the recipient.
+--      The operator must decide: reconnect the assigned sender, or
+--      manually reassign.
+--
+-- Function body in deployed Postgres.
+
+select 1 where false;

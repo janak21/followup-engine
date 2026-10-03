@@ -1,0 +1,26 @@
+-- Ops fixes + Operations page helpers.
+--
+-- 1. events.gmail_api_message_id (text) + UNIQUE partial index on
+--    (tenant_id, channel, direction, gmail_api_message_id) WHERE
+--    channel='email' AND gmail_api_message_id is not null. Deduplicates
+--    repeated Gmail-API ingestion (history pagination + missing Message-ID
+--    header → previously created two events with different provider_ids).
+--
+-- 2. process_team_alert_action(action_id) + dispatch_pending_actions now
+--    handles team_alert inline (writes to error_logs at severity=info,
+--    status=open; marks action completed). Without n8n consuming the
+--    queue, team_alerts were sitting in_progress forever.
+--
+-- 3. ops_cron_summary() — last run + status for every pg_cron job.
+--    ops_pg_net_recent() — last 30 responses from pg_net (60-min window).
+--    Both are security-definer wrappers so the Operations page API route
+--    can read cron + net schemas without granting cross-schema perms to
+--    the service role.
+--
+-- 4. tenant default_ai_agent_id was re-set to adf1d621 (had been cleared
+--    silently somewhere; will surface as an "Needs attention" banner in
+--    the Operations page if it ever clears again).
+--
+-- Function bodies in deployed Postgres.
+
+select 1 where false;

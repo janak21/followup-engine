@@ -1,0 +1,28 @@
+-- Per-sender OAuth client (Option C in the architecture conversation).
+--
+-- Each sender now carries its own Google OAuth client_id + secret so
+-- different senders can live in different Google Workspaces. Each
+-- Workspace has its own internal-only OAuth client; per-sender override
+-- means one Example Co tenant can fan out across many domains for
+-- deliverability isolation.
+--
+-- Precedence at every read point (oauth/start, oauth/callback,
+-- dispatch-gmail-email, test-send):
+--   1. sender.google_client_id + google_client_secret
+--   2. tenant_credentials.config.google_client_id + google_client_secret
+--   (NULL on sender means "no override; use tenant default")
+--
+-- Snapshot invariant: the oauth/callback route writes whichever pair
+-- it actually used onto the sender row, so token refresh forever uses
+-- the SAME client_id+secret that issued the refresh_token. Mixing
+-- them produces invalid_grant. Snapshot also means rotating the
+-- tenant default doesn't silently break existing connected senders.
+--
+-- Backfill: existing senders with refresh_tokens get the tenant's
+-- gmail client_id+secret copied onto their row, preserving the
+-- snapshot invariant retroactively. Without this, the precedence
+-- change (sender > tenant) would break an existing sender connection.
+--
+-- Columns + backfill in deployed Postgres.
+
+select 1 where false;

@@ -1,0 +1,32 @@
+-- Cross-channel engagement cancellation.
+--
+-- One chokepoint RPC, called from every inbound handler when a lead clearly
+-- engages — the engine cancels all OTHER pending outbound actions for that
+-- lead so they don't keep getting nudged after they've already responded.
+--
+-- Engagement signals:
+--   * sms_reply         — inbound SMS that isn't an opt-out
+--   * email_reply       — inbound email that isn't a bounce or opt-out
+--   * call_answered     — Retell call_outcome='answered' and not callback_requested
+--
+-- Exemptions in cancel_pending_on_engagement:
+--   * team_alert        — operator wants the alert (it IS the value of the engagement)
+--   * wait_reply        — consumed/advanced through its own path; don't kill mid-handler
+--   * caller's source_action_id — preserves the action that triggered the engagement
+--
+-- Audit trail per cancel:
+--   * one events row (channel=system, direction=internal) on the lead's
+--     interaction timeline noting the engagement and the cancelled count
+--   * one error_logs row (severity=info) so it surfaces on the Errors page
+--
+-- The opt-out paths (STOP/UNSUBSCRIBE on SMS or email, hard email bounces)
+-- already cancel everything via their existing branches; we skip the
+-- engagement call in those paths to avoid double-cancelling.
+--
+-- Function bodies in deployed Postgres. Smoke-tested live:
+--   - Inserted a pending email + pending team_alert for AutoZ
+--   - Called cancel_pending_on_engagement
+--   - Email → status='cancelled' with engagement message in error_message
+--   - team_alert → status='pending' (exempt as expected)
+
+select 1 where false;

@@ -1,0 +1,172 @@
+
+@import "@xyflow/react/dist/style.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  .text-pretty {
+    text-wrap: pretty;
+  }
+  .noise-overlay {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 200px 200px;
+  }
+  .dark .noise-overlay {
+    opacity: 0.05;
+  }
+}
+
+@layer base {
+  .theme {
+    --font-heading: var(--font-sans);
+    --font-sans: var(--font-sans);
+  }
+  :root {
+    --background: oklch(1 0 0);
+    --foreground: oklch(0.145 0 0);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.145 0 0);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.145 0 0);
+    --primary: oklch(0.205 0 0);
+    --primary-foreground: oklch(0.985 0 0);
+    --secondary: oklch(0.97 0 0);
+    --secondary-foreground: oklch(0.205 0 0);
+    --muted: oklch(0.97 0 0);
+    --muted-foreground: oklch(0.556 0 0);
+    --accent: oklch(0.97 0 0);
+    --accent-foreground: oklch(0.205 0 0);
+    --destructive: oklch(0.577 0.245 27.325);
+    --border: oklch(0.922 0 0);
+    --input: oklch(0.922 0 0);
+    --ring: oklch(0.47 0.11 260);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --radius: 0.625rem;
+    /* Elevation surface scale. Only rendered under .dark (these classes are
+       always paired with a light bg-* utility); light values are near-white
+       fallbacks so an accidental unscoped use is not broken. */
+    --surface-base: #ffffff;
+    --surface-1: #ffffff;
+    --surface-2: #fafafa;
+    --surface-3: #f4f4f5;
+    --sidebar: oklch(0.985 0 0);
+    --sidebar-foreground: oklch(0.145 0 0);
+    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.97 0 0);
+    --sidebar-accent-foreground: oklch(0.205 0 0);
+    --sidebar-border: oklch(0.922 0 0);
+    --sidebar-ring: oklch(0.708 0 0);
+    --chart-grid: rgba(0, 0, 0, 0.05);
+    --chart-text-muted: rgba(0, 0, 0, 0.62);
+    --chart-text-active: rgba(0, 0, 0, 0.8);
+    --chart-bar-bg: rgba(0, 0, 0, 0.03);
+    --chart-bar-hover-bg: rgba(0, 0, 0, 0.08);
+    --chart-bar-stroke: rgba(0, 0, 0, 0.06);
+    --chart-bar-hover-stroke: rgba(0, 0, 0, 0.2);
+    --chart-line-stroke: rgba(0, 0, 0, 0.58);
+    --chart-area-stop-0: rgba(0, 0, 0, 0.04);
+    --chart-area-stop-100: rgba(0, 0, 0, 0);
+    --chart-halo: rgba(0, 0, 0, 0.06);
+    --chart-halo-stroke: rgba(0, 0, 0, 0.12);
+    --chart-dot-fill: rgba(0, 0, 0, 0.8);
+    --chart-dot-hover-fill: #000000;
+  }
+  .dark {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    /* Dark elevation surface scale — consolidates the ad-hoc near-black
+       shades that used to be hardcoded across pages. */
+    --surface-base: #050505;
+    --surface-1: #0c0c0c;
+    --surface-2: #121212;
+    --surface-3: #141414;
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --ring: oklch(0.74 0.12 260);
+    --chart-1: oklch(0.87 0 0);
+    --chart-2: oklch(0.556 0 0);
+    --chart-3: oklch(0.439 0 0);
+    --chart-4: oklch(0.371 0 0);
+    --chart-5: oklch(0.269 0 0);
+    --sidebar: oklch(0.205 0 0);
+    --sidebar-foreground: oklch(0.985 0 0);
+    --sidebar-primary: oklch(0.488 0.243 264.376);
+    --sidebar-primary-foreground: oklch(0.985 0 0);
+    --sidebar-accent: oklch(0.269 0 0);
+    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --sidebar-border: oklch(1 0 0 / 10%);
+    --sidebar-ring: oklch(0.556 0 0);
+    --chart-grid: rgba(255, 255, 255, 0.03);
+    --chart-text-muted: rgba(255, 255, 255, 0.68);
+    --chart-text-active: rgba(255, 255, 255, 0.8);
+    --chart-bar-bg: rgba(255, 255, 255, 0.05);
+    --chart-bar-hover-bg: rgba(255, 255, 255, 0.15);
+    --chart-bar-stroke: rgba(255, 255, 255, 0.1);
+    --chart-bar-hover-stroke: rgba(255, 255, 255, 0.4);
+    --chart-line-stroke: rgba(255, 255, 255, 0.72);
+    --chart-area-stop-0: rgba(255, 255, 255, 0.08);
+    --chart-area-stop-100: rgba(255, 255, 255, 0);
+    --chart-halo: rgba(255, 255, 255, 0.15);
+    --chart-halo-stroke: rgba(255, 255, 255, 0.2);
+    --chart-dot-fill: rgba(255, 255, 255, 0.9);
+    --chart-dot-hover-fill: #ffffff;
+  }
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+    scroll-behavior: smooth;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+  :where(a, button, input, textarea, select, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  ::placeholder {
+    color: rgb(113 113 122);
+    opacity: 1;
+  }
+  .dark ::placeholder {
+    color: rgb(161 161 170);
+  }
+  ::selection {
+    background: color-mix(in oklch, var(--ring), transparent 72%);
+  }
+}
