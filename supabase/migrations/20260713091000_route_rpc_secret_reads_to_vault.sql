@@ -44,6 +44,10 @@ begin
 end;
 $$;
 
+-- The return columns changed (from_number added), which create or replace
+-- can't do, so a fresh replay needs the old signature dropped first.
+drop function if exists public.resolve_twilio_creds_for_sid(text);
+
 create or replace function public.resolve_twilio_creds_for_sid(p_sid text)
 returns table(tenant_id uuid, account_sid text, auth_token text, from_number text, has_creds boolean)
 language plpgsql
@@ -87,6 +91,10 @@ begin
       and v_auth_token is not null;
 end;
 $$;
+
+-- Returns Twilio auth tokens: keep it service-role only after the re-create.
+revoke all on function public.resolve_twilio_creds_for_sid(text) from public, anon, authenticated;
+grant execute on function public.resolve_twilio_creds_for_sid(text) to service_role;
 
 create or replace function public.resolve_retell_credentials(
   p_agent_id text,
