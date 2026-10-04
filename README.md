@@ -34,6 +34,8 @@ The engine first ran on an external workflow runtime and was moved to native Pos
 
 ## Running it locally
 
+Using a coding agent (Claude Code, Codex, Cursor and others)? Ask it to set the project up; [`AGENTS.md`](AGENTS.md) walks it through the same steps, with a check after each one.
+
 You need Docker, the [Supabase CLI](https://supabase.com/docs/guides/local-development) and Node.js 20.9 or later. Everything runs on your machine; no Supabase account is needed.
 
 **1. Start Supabase.** This applies every migration and loads `supabase/seed.sql`: a demo workspace with sample journeys and templates, the local Vault secrets the dispatcher needs, and an owner invite for `demo@example.com`.
@@ -66,7 +68,7 @@ npm run dev
 
 **4. Sign up** at http://localhost:3000/auth/signup (or the port `npm run dev` prints) with `demo@example.com` and any password of 8 or more characters. That account becomes owner of the demo workspace. Other emails sign up fine but have no workspace until an owner invites them.
 
-**5. Try it.** Add a lead on the Leads page and pick `demo_journey_1`. The lead is enrolled and its first email is queued. Within 30 seconds the cron dispatcher hands it to the `dispatch-gmail-email` function, which reschedules it with "No sender available" until you connect a Gmail sender on the Settings page. That is the full path working without any provider account.
+**5. Try it.** Add a lead on the Leads page and pick the Demo Email Journey. The lead is enrolled and its first email is queued. Within 30 seconds the cron dispatcher hands it to the `dispatch-gmail-email` function, which answers "No sender available" because no Gmail account is connected. The engine retries three times over a few minutes, then marks the step failed, and it shows up under "Needs attention" on the dashboard and on the Operations page. That is the whole path working without any provider account.
 
 To send for real, add provider credentials per workspace in the dashboard: Gmail senders and Twilio and Retell credentials, all on the Settings page. Outbound email, SMS and calls then go through those accounts.
 
