@@ -77,3 +77,20 @@ values (
 ) on conflict (tenant_id, journey_key, version) do update 
 set name = excluded.name,
     spec = excluded.spec;
+
+-- 4. Local-only setup. Seeds run on `supabase start` / `supabase db reset`,
+--    never on `supabase db push`, so none of this reaches a hosted project.
+
+-- The cron dispatcher reaches Edge Functions through the local API gateway
+-- container and signs each call with the internal dispatch key. The key must
+-- match INTERNAL_DISPATCH_KEY in supabase/functions/.env.
+select vault.create_secret('http://supabase_kong_followup-engine:8000', 'functions_base_url')
+ where not exists (select 1 from vault.secrets where name = 'functions_base_url');
+select vault.create_secret('local-dev-dispatch-key', 'internal_dispatch_key')
+ where not exists (select 1 from vault.secrets where name = 'internal_dispatch_key');
+
+-- Signing up as demo@example.com makes you owner of the seed workspace
+-- (the trg_consume_invites trigger on auth.users turns the invite into a membership).
+insert into tenant_invites (tenant_id, email, role)
+values ('00000000-0000-0000-0000-000000000001', 'demo@example.com', 'owner')
+on conflict (email, tenant_id) do nothing;
