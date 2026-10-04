@@ -411,3 +411,28 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# These functions authenticate callers themselves (internal dispatch key,
+# Twilio/Retell signatures or a per-journey token), so the gateway JWT check
+# must be off or every dispatch is rejected. twilio-status-poll has no auth of
+# its own and keeps the default JWT check.
+[functions.dispatch-gmail-email]
+verify_jwt = false
+[functions.dispatch-retell-call]
+verify_jwt = false
+[functions.dispatch-twilio-sms]
+verify_jwt = false
+[functions.generate-ai-reply]
+verify_jwt = false
+[functions.journey-trigger]
+verify_jwt = false
+[functions.notify-operator]
+verify_jwt = false
+[functions.poll-gmail-inbox]
+verify_jwt = false
+[functions.retell-result]
+verify_jwt = false
+[functions.twilio-inbound]
+verify_jwt = false
+[functions.twilio-status]
+verify_jwt = false
