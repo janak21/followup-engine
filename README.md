@@ -4,6 +4,8 @@ A multi-tenant engine that follows up with leads over email, SMS and AI voice ca
 
 You define a journey (for example: email now, SMS after a day, an AI voice call if there's still no reply). The engine works out when each step should go out, sends it through the right provider, stops when the lead responds, and hands the lead to a person when it needs one.
 
+![Dashboard walkthrough: follow-up overview, leads list and a lead's timeline, journeys, the visual journey builder, AI reply agents and custom fields](docs/followup-engine-demo.gif)
+
 ## What it does
 
 - **Email, SMS and voice in one journey.** Gmail for email, Twilio for SMS, Retell AI for voice calls. Each tenant brings its own credentials and sender pool.
